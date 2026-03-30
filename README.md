@@ -1,7 +1,7 @@
 [中文版](README_zh.md) | English
 
 # Qtrace
-QBDI based Android arm64 trace tool
+基于qbdi的安卓arm64真机trace工具
 
 # Features
 * 自定义函数hook监控
