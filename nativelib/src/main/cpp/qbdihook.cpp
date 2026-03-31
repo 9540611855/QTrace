@@ -18,7 +18,7 @@ void hook_0x71DD54(QBDI::VM *vm, QBDI::GPRState *gprState)
     char* base64 = (char*) malloc(2 * len);
     memset(base64,0,2*len);
     base64_encode(base64,(uint8_t*)input,len);
-    LOGE("base64:%s,res:%s",hex,base64);
+    LOGE("base64:src:%p,raw:%s,res:%s",input,hex,base64);
     appendlogendl();
     appendformat("base64:src:%p,raw:%s,res:%s",input,hex,base64);
     appendlogendl();

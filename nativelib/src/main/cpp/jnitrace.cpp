@@ -297,6 +297,7 @@ void trace_RegisterNatives(QBDI::VM *vm, QBDI::GPRState *gprState)
         appendlog(nativeMethods[i].signature);
         appendlog(",");
         appendlog(nativeMethods[i].name);
+        appendlog(",");
         appendformat("%lx",(size_t)nativeMethods[i].fnPtr - _g_trace_data->base);
         appendlogendl();
     }

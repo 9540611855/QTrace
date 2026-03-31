@@ -126,7 +126,6 @@ void trace()
     //添加目标so的hook点位
     addHooks();
 
-    /*signal hook挂载hook点，等待触发trace*/
     auto soinfo = getSoBaseAddress(libpath.c_str(),libname.c_str());
     if(soinfo.start != 0)
     {
