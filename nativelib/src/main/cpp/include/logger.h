@@ -21,6 +21,7 @@ struct logger{
     std::string logfile;      // 本线程的临时分片文件（.part），trace 期间独占写入
     int64_t lastwrite;
     int64_t totallen;
+    int     fd;               // 分片文件的持久 fd，避免每次刷盘 open/close
     int     seq;              // 本线程 trace 的开始序号（全局递增），用于最终排序
     int     tid;              // 本线程 tid
     int     creator_tid;      // 开启本线程的父线程 tid（主线程为 0）
@@ -42,6 +43,8 @@ void writelog();
 // 供 crash handler 在崩溃时调用，尽量保留崩溃前的指令流。
 void writelog_signal_safe();
 void appendlog(const char* str);
+// 带长度追加：调用方已知长度时省去一次 strlen（热路径用）
+void appendlog_n(const char* str, size_t len);
 void appendlogendl();
 void appendformat(const char* format,...);
 

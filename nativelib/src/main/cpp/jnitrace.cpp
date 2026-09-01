@@ -2,6 +2,7 @@
 // Created by zgy on 2025/10/30.
 //
 
+#include <dlfcn.h>
 #include "jnitrace.h"
 #include "HookUtils.h"
 #include "logger.h"
@@ -15,7 +16,7 @@ void initJni()
 {
     LOGE("Find Jni");
     typedef jint (*JNI_GetCreatedJavaVMs_t)(JavaVM**, jsize, jsize*);
-    JNI_GetCreatedJavaVMs_t getCreatedVMs = (JNI_GetCreatedJavaVMs_t)findSymbolInLibArt("libart.so","JNI_GetCreatedJavaVMs");
+    JNI_GetCreatedJavaVMs_t getCreatedVMs = (JNI_GetCreatedJavaVMs_t)dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs");//(JNI_GetCreatedJavaVMs_t)findSymbolInLibArt("libart.so","JNI_GetCreatedJavaVMs");
     JavaVM* jvm = nullptr;
     jsize count = 0;
     if((size_t)getCreatedVMs == -1)

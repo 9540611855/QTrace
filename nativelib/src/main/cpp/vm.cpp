@@ -72,12 +72,9 @@ bool qtrace_thread_budget_ok()
     return g_active_trace_threads.load(std::memory_order_relaxed) < g_max_trace_threads;
 }
 
-func_arg_0 ori_arg0{};
-func_arg_1 ori_arg1{};
-func_arg_2 ori_arg2{};
-func_arg_3 ori_arg3{};
 func_arg_4 ori_arg4{};
 func_arg_5 ori_arg5{};
+func_arg_8 ori_arg8{};
 
 void setBufferSize(int size)
 {
@@ -253,54 +250,6 @@ size_t trace(size_t regs[31], size_t* stack_params, int stack_param_count)
     return run_qbdi_trace(function_address, regs, stack_params, stack_param_count, 0);
 }
 
-size_t hook_and_trace_arg0()
-{
-    size_t regs[31] = {0};
-    save_regs(regs);
-    size_t result = trace(regs);
-    rearm_target_hook((void*)(hook_and_trace_arg0), (void**)&ori_arg0);
-    return result;
-}
-
-size_t hook_and_trace_arg1(size_t x0)
-{
-    //对参数x0进行解析过滤,不符合条件的直接调用原函数返回
-    //return ori_arg1(x0);
-    size_t regs[31] = {0};
-    save_regs(regs);
-    regs[0] = x0;
-    size_t result = trace(regs);
-    rearm_target_hook((void*)(hook_and_trace_arg1), (void**)&ori_arg1);
-    return result;
-}
-
-size_t hook_and_trace_arg2(size_t x0,size_t x1)
-{
-    //对参数x0,x1进行解析过滤,不符合条件的直接调用原函数返回
-    //return ori_arg2(x0,x1);
-    size_t regs[31] = {0};
-    save_regs(regs);
-    regs[0] = x0;
-    regs[1] = x1;
-    size_t result = trace(regs);
-    rearm_target_hook((void*)(hook_and_trace_arg2), (void**)&ori_arg2);
-    return result;
-}
-
-size_t hook_and_trace_arg3(size_t x0,size_t x1,size_t x2)
-{
-    //对参数x0,x1进行解析过滤,不符合条件的直接调用原函数返回
-    //return ori_arg3(x0,x1,x2);
-    size_t regs[31] = {0};
-    save_regs(regs);
-    regs[0] = x0;
-    regs[1] = x1;
-    regs[2] = x2;
-    size_t result = trace(regs);
-    rearm_target_hook((void*)(hook_and_trace_arg3), (void**)&ori_arg3);
-    return result;
-}
-
 size_t hook_and_trace_arg4(size_t x0,size_t x1,size_t x2,size_t x3)
 {
     //可配置过滤（qtrace.config 的 filter）：非 0 时仅 x2 等于该值才 trace，其余直接调用原函数
@@ -316,6 +265,29 @@ size_t hook_and_trace_arg4(size_t x0,size_t x1,size_t x2,size_t x3)
     regs[3] = x3;
     size_t result = trace(regs);
     rearm_target_hook((void*)(hook_and_trace_arg4), (void**)&ori_arg4);
+    return result;
+}
+
+size_t hook_and_trace_arg8(size_t x0,size_t x1,size_t x2,size_t x3,
+                           size_t x4,size_t x5,size_t x6,size_t x7)
+{
+    //可配置过滤（qtrace.config 的 filter）：非 0 时仅 x0 等于该值才 trace，其余直接调用原函数
+    if(trace_filter != 0 && x0 != trace_filter)
+    {
+        return ori_arg8(x0,x1,x2,x3,x4,x5,x6,x7);
+    }
+    size_t regs[31] = {0};
+    save_regs(regs);
+    regs[0] = x0;
+    regs[1] = x1;
+    regs[2] = x2;
+    regs[3] = x3;
+    regs[4] = x4;
+    regs[5] = x5;
+    regs[6] = x6;
+    regs[7] = x7;
+    size_t result = trace(regs);
+    rearm_target_hook((void*)(hook_and_trace_arg8), (void**)&ori_arg8);
     return result;
 }
 
@@ -338,11 +310,6 @@ size_t hook_and_trace_arg5(size_t x0,size_t x1,size_t x2,size_t x3,size_t x4)
     size_t result = trace(regs);
     rearm_target_hook((void*)(hook_and_trace_arg5), (void**)&ori_arg5);
     return result;
-}
-
-size_t trace_jni_onload(size_t jni,size_t jobj)
-{
-    return hook_and_trace_arg2(jni,jobj);
 }
 
 size_t hook_and_trace_sig3_mode2(size_t x0,size_t x1,size_t x2,size_t x3)
@@ -533,8 +500,8 @@ QBDI::VMAction showPreInstruction(QBDI::VM *vm, QBDI::GPRState *gprState, QBDI::
 
     if(!hasCheck)
     {
-        //检查blr
-        if(instAnalysis->disassembly && strstr(instAnalysis->disassembly,"blr"))
+        //检查blr：用 isCall+mnemonic 精确判定，替代子串匹配（"blr" 含 "br"，子串法易误配）
+        if(instAnalysis->isCall && instAnalysis->mnemonic && !strcmp(instAnalysis->mnemonic,"BLR"))
         {
             for (int i = 0; i < instAnalysis->numOperands; ++i)
             {
@@ -560,8 +527,8 @@ QBDI::VMAction showPreInstruction(QBDI::VM *vm, QBDI::GPRState *gprState, QBDI::
 
     if(!hasCheck)
     {
-        //检查br
-        if(instAnalysis->disassembly && strstr(instAnalysis->disassembly,"br") && hasLibctrace())
+        //检查br：用 isBranch+mnemonic 精确判定（见上 blr 处说明）
+        if(instAnalysis->isBranch && instAnalysis->mnemonic && !strcmp(instAnalysis->mnemonic,"BR") && hasLibctrace())
         {
             for (int i = 0; i < instAnalysis->numOperands; ++i)
             {

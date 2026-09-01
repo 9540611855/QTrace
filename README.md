@@ -92,3 +92,6 @@ max_threads=0
 5.Build-Generate Apks,将自动生成libnativelib.so ,将其 push 到 /data/local/tmp目录下
 
 6.使用第三方工具（如 frida）将 libnativelib.so 注入目标进程（dlopen 即自动生效）
+
+# 使用教程
+[QTrace：基于QBDI的高稳定，高定制的trace工具](https://bbs.kanxue.com/thread-290574.htm)

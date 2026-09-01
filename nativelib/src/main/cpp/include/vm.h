@@ -65,28 +65,13 @@ size_t trace(size_t regs[31], size_t* stack_params = nullptr, int stack_param_co
 
 void sync_regs(size_t* regs,size_t pc,QBDI::GPRState* qbdi_state);
 
-size_t trace_jni_onload(size_t jni,size_t jobj);
-
-typedef size_t (*func_arg_0)();
-extern func_arg_0 ori_arg0;
-size_t hook_and_trace_arg0();
-
-typedef size_t (*func_arg_1)(size_t x0);
-extern func_arg_1 ori_arg1;
-size_t hook_and_trace_arg1(size_t x0);
-
-typedef size_t (*func_arg_2)(size_t x0,size_t x1);
-extern func_arg_2 ori_arg2;
-size_t hook_and_trace_arg2(size_t x0,size_t x1);
-
-typedef size_t (*func_arg_3)(size_t x0,size_t x1,size_t x2);
-extern func_arg_3 ori_arg3;
-size_t hook_and_trace_arg3(size_t x0,size_t x1,size_t x2);
+typedef size_t (*func_arg_8)(size_t x0,size_t x1,size_t x2,size_t x3,size_t x4,size_t x5,size_t x6,size_t x7);
+extern func_arg_8 ori_arg8;
+size_t hook_and_trace_arg8(size_t x0,size_t x1,size_t x2,size_t x3,size_t x4,size_t x5,size_t x6,size_t x7);
 
 typedef size_t (*func_arg_4)(size_t x0,size_t x1,size_t x2,size_t x3);
 extern func_arg_4 ori_arg4;
 size_t hook_and_trace_arg4(size_t x0,size_t x1,size_t x2,size_t x3);
-
 
 typedef size_t (*func_arg_5)(size_t x0,size_t x1,size_t x2,size_t x3,size_t x4);
 extern func_arg_5 ori_arg5;

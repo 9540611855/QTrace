@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <fcntl.h>
+#include <cerrno>
+#include <cstring>
 #include <mutex>
 #include <atomic>
 #include <string>
@@ -61,6 +63,14 @@ void initLogger(size_t function_address, int creator_tid, size_t routine_offset)
     _logger->logfile = path;
     _logger->lastwrite = 0;
     _logger->totallen = 0;
+    // 持久 fd：整个 trace 期间只 open/close 一次，writelog 直接 write。
+    // 每次 trace 会话新建分片（会话结束时 mergeThreadLog 会 unlink），TRUNC 合理。
+    _logger->fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (_logger->fd < 0) {
+        LOGE("initLogger: open part file fail: %s", path.c_str());
+    }
+    // 预留适量空间，避免 sds 反复扩容搬移（大缓冲留给长 trace 按需增长）
+    _logger->buf = sdsMakeRoomFor(_logger->buf, 0x40000);
     _logger->seq = g_seq_counter.fetch_add(1);
     _logger->tid = (int)tid;
     _logger->creator_tid = creator_tid;
@@ -72,6 +82,11 @@ void deleteLogger()
     if(_logger != nullptr)
     {
         sdsfree(_logger->buf);
+        if(_logger->fd >= 0)
+        {
+            close(_logger->fd);
+            _logger->fd = -1;
+        }
     }
     delete _logger;
     _logger = nullptr;
@@ -83,6 +98,14 @@ void appendlog(const char* str)
       {
           _logger->buf = sdscat(_logger->buf, str);
       }
+}
+
+void appendlog_n(const char* str, size_t len)
+{
+    if(_logger != nullptr)
+    {
+        _logger->buf = sdscatlen(_logger->buf, str, len);
+    }
 }
 
 void appendlogendl()
@@ -98,17 +121,38 @@ void appendformat(const char* format,...)
     va_end(ap);
 }
 
+// 把 buf 全量写入 fd，处理短写与 EINTR
+static bool write_all(int fd, const char* buf, size_t count)
+{
+    size_t written = 0;
+    while (written < count) {
+        ssize_t n = write(fd, buf + written, count - written);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            LOGE("writelog: write failed: %s", strerror(errno));
+            return false;
+        }
+        written += (size_t)n;
+    }
+    return true;
+}
+
 void writelog()
 {
     _logger->totallen = _logger->lastwrite + sdslen(_logger->buf);
     LOGE("write log:%lx,%lx,%s", _logger->lastwrite,_logger->totallen,_logger->logfile.c_str());
-    std::ofstream out(_logger->logfile.c_str(), std::ios::app);
-    if (!out.is_open()) {
-        LOGE("Failed to create trace log file: %s", _logger->logfile.c_str());
-        return ;
+    if (_logger->fd >= 0) {
+        write_all(_logger->fd, _logger->buf, sdslen(_logger->buf));
+    } else {
+        // fd 打开失败时的兜底：退回 ofstream 追加
+        std::ofstream out(_logger->logfile.c_str(), std::ios::app);
+        if (!out.is_open()) {
+            LOGE("Failed to create trace log file: %s", _logger->logfile.c_str());
+            return ;
+        }
+        out << _logger->buf;
+        out.close();
     }
-    out << _logger->buf;
-    out.close();
     _logger->lastwrite = _logger->totallen;
     sdsfree(_logger->buf);
     _logger->buf = sdsempty();

@@ -85,7 +85,7 @@ size_t trace_func = 0;
  * 格式为 key=value，每行一条，# 开头为注释：
  *   so=libtiny.so            目标SO名（文件需放在 /data/local/tmp/ 下）
  *   func=157084              目标函数在SO内的偏移（十六进制，可带0x）
- *   mode=s1                  hook proxy 模式：arg4/arg5/sig3/dfp/s1
+ *   mode=s1                  hook proxy 模式：arg4/arg5/arg8/sig3/dfp/s1
  *   filter=0                 参数过滤值（arg4/arg5模式比较x2；0=不过滤。十进制或0x十六进制）
  *   bufsize=1000000          每线程日志缓冲刷盘阈值（十六进制；默认16MB）
  *   max_threads=0            同时trace的线程数上限，0=不限
@@ -196,6 +196,7 @@ struct HookModeEntry {
 static const HookModeEntry g_hook_modes[] = {
     {"arg4", (void*)hook_and_trace_arg4,       (void**)&ori_arg4},
     {"arg5", (void*)hook_and_trace_arg5,       (void**)&ori_arg5},
+    {"arg8", (void*)hook_and_trace_arg8,       (void**)&ori_arg8},
     {"sig3", (void*)hook_and_trace_sig3_mode2, (void**)&ori_arg4},
     {"dfp",  (void*)hook_and_trace_dfp,        (void**)&ori_arg4},
     {"s1",   (void*)hook_and_trace_s1,         (void**)&ori_arg_s1},
@@ -214,7 +215,7 @@ static void setup_trace()
             }
         }
         if (mode == nullptr) {
-            LOGE("setup_trace: unknown mode \"%s\", valid: arg4/arg5/sig3/dfp/s1 — trace NOT installed", cfg_mode);
+            LOGE("setup_trace: unknown mode \"%s\", valid: arg4/arg5/arg8/sig3/dfp/s1 — trace NOT installed", cfg_mode);
             return;
         }
         _g_trace_data = new g_trace_data();
