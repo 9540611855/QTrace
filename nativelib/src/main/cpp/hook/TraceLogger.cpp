@@ -16,12 +16,15 @@
 #include <sstream>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <mutex>
 #include "vm.h"
 
 //目前仅有线程创建需要统计别的hook 暂时不需要有任何统计信息
 // 全局统计数据
 static ThreadStatistics g_thread_stats;
 static std::map<LogType, int> g_log_counters;
+// 多个 trace 线程会并发调用 getLogPath，采番/建目录需串行化
+static std::mutex g_log_path_mutex;
 
 // 统计报告配置
 #define REPORT_CALL_INTERVAL 60     // 每60次调用生成报告
@@ -161,6 +164,7 @@ bool ensureLogDirectory(const std::string& log_dir) {
 
 std::string getLogPath(LogType type,void* address)
 {
+    std::lock_guard<std::mutex> lock(g_log_path_mutex);
     std::string private_path = getPrivatePath();
 
     // 创建trace_logs目录

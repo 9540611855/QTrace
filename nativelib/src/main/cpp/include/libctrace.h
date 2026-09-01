@@ -22,6 +22,9 @@ void libc_system_property_get(QBDI::VM *vm, QBDI::GPRState *gprState);
 void libc_memcpy(QBDI::VM *vm, QBDI::GPRState *gprState);
 void libc_memmove(QBDI::VM *vm, QBDI::GPRState *gprState);
 void libc_pthread_create(QBDI::VM *vm, QBDI::GPRState *gprState);
+// 在 br/blr 指令的 POSTINST 中调用：检查刚被重定向的 pthread_create 的返回值，
+// 创建失败时回收暂存的 thread_trace_ctx（成功时由子线程 trampoline 释放）。
+void libc_pthread_create_post(QBDI::GPRState *gprState);
 void libc_fopen(QBDI::VM *vm, QBDI::GPRState *gprState);
 void libc_lstat(QBDI::VM *vm, QBDI::GPRState *gprState);
 void libc_execve(QBDI::VM *vm, QBDI::GPRState *gprState);

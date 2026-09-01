@@ -43,6 +43,7 @@ set(PROJECT_SOURCES
     jnitrace.cpp
     libctrace.cpp
     qbdihook.cpp logger.cpp
+    crashhandler.cpp
     third/md5.c
     third/sds.c
     ${HOOK_SOURCES}

@@ -5,6 +5,7 @@
 #include "dlfcn.h"
 #include "logger.h"
 #include "HookUtils.h"
+#include <unistd.h>
 LibcTraceMap* _g_libc_trace = nullptr;
 static bool debug = false;
 
@@ -174,6 +175,11 @@ void libc_system_property_get(QBDI::VM *vm, QBDI::GPRState *gprState)
     appendlogendl();
 }
 
+// 最近一次重定向 pthread_create 时暂存的 ctx（线程本地）。
+// PREINST 中记录，紧随其后的 POSTINST（libc_pthread_create_post）消费：
+// 创建失败时回收，成功时仅清标记（ctx 由子线程 trampoline 释放）。
+static thread_local thread_trace_ctx* t_pending_pthread_ctx = nullptr;
+
 void libc_pthread_create(QBDI::VM *vm, QBDI::GPRState *gprState)
 {
     if(_logger == nullptr)
@@ -181,7 +187,11 @@ void libc_pthread_create(QBDI::VM *vm, QBDI::GPRState *gprState)
         LOGE("qdbi hook:logger not init!");
         return;
     }
+    // pthread_create(pthread_t* thread, const attr*, void* (*start_routine)(void*), void* arg)
+    // x2 = start_routine, x3 = arg
     uint64_t x2 = QBDI_GPR_GET(gprState, 2);
+    uint64_t x3 = QBDI_GPR_GET(gprState, 3);
+
     if(debug)
     {
         LOGE("libc pthread_create:%lx",x2 - _g_trace_data->base);
@@ -189,6 +199,57 @@ void libc_pthread_create(QBDI::VM *vm, QBDI::GPRState *gprState)
     appendlogendl();
     appendformat("[log] libc pthread_create:%lx",x2 - _g_trace_data->base);
     appendlogendl();
+
+    // 只追踪 start_routine 落在目标 SO 内的子线程（即“由我们 trace 的代码开启的线程”）。
+    // 范围外的线程（libc/libart 内部线程等）QBDI 无法计装，直接放行，避免无谓的 VM 开销。
+    if (x2 < _g_trace_data->start || x2 >= _g_trace_data->end)
+    {
+        LOGE("pthread_create routine 0x%lx out of target SO [0x%lx,0x%lx), pass through",
+             x2, _g_trace_data->start, _g_trace_data->end);
+        return;
+    }
+
+    // 线程预算（qtrace.config 的 max_threads，0=不限）：每个被 trace 线程持有独立
+    // QBDI VM，线程池型目标会线性吃内存；超预算的子线程不重定向，原生执行。
+    if (!qtrace_thread_budget_ok())
+    {
+        LOGE("pthread_create routine 0x%lx: trace thread budget exhausted, pass through", x2);
+        return;
+    }
+
+    // 关键：把子线程的入口改写为我们的 trampoline，让子线程在自己的
+    // QBDI VM 中被完整 trace。原始 start_routine/arg 暂存在堆上的 ctx 里。
+    // 该回调运行在 br/blr 的 PREINST，此时 QBDI 尚未原生执行 pthread_create，
+    // 改写寄存器后 ExecBroker 会用新的入口创建子线程。
+    thread_trace_ctx* ctx = new thread_trace_ctx();
+    ctx->start_routine = x2;
+    ctx->arg = x3;
+    ctx->creator_tid = (int)gettid();
+    QBDI_GPR_SET(gprState, 2, (QBDI::rword)qtrace_thread_trampoline);
+    QBDI_GPR_SET(gprState, 3, (QBDI::rword)ctx);
+    // 记录待定 ctx：本条指令执行完（pthread_create 返回）后由
+    // libc_pthread_create_post 检查返回值，创建失败则在此回收，避免泄漏。
+    // 成功时 ctx 由子线程 trampoline 内 delete，post 检查只清标记。
+    t_pending_pthread_ctx = ctx;
+    LOGE("pthread_create redirected: routine=0x%lx -> trampoline, ctx=%p",
+         x2, (void*)ctx);
+}
+
+void libc_pthread_create_post(QBDI::GPRState* gprState)
+{
+    if (t_pending_pthread_ctx == nullptr) {
+        return;
+    }
+    thread_trace_ctx* ctx = t_pending_pthread_ctx;
+    t_pending_pthread_ctx = nullptr;
+    // pthread_create 成功返回 0，此时 ctx 已/将由子线程 trampoline 释放；
+    // 失败返回错误码，子线程不存在，ctx 无人释放，在这里回收。
+    uint64_t ret = QBDI_GPR_GET(gprState, 0);
+    if (ret != 0) {
+        LOGE("pthread_create failed ret=%lu, reclaim ctx=%p",
+             (unsigned long)ret, (void*)ctx);
+        delete ctx;
+    }
 }
 
 void libc_clock_gettime(QBDI::VM *vm, QBDI::GPRState *gprState)
